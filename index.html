@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1a1d24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Alianças">
+<title>Alianças da Loja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: uma coluna de balcão (celular) — abas Registrar / Estoque / Histórico; numeração 14–29 em grade 4×4 como o anelômetro */
+:root{
+  --bg:#eef0f2; --surface:#ffffff; --ink:#1a1d24; --muted:#5f6673; --line:#d5d9df;
+  --brass:#8a5e10; --brass-soft:#f3e7cc; --on-brass:#ffffff;
+  --in:#1c6b3a; --in-soft:#d9f0e0; --out:#a3271b; --out-soft:#f8dcd8;
+  --display:"Unbounded",ui-sans-serif,system-ui,sans-serif;
+  --body:"Instrument Sans",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#121418; --surface:#1c1f25; --ink:#eceef2; --muted:#9aa1ad; --line:#323741;
+  --brass:#e3b45c; --brass-soft:#3a2f1a; --on-brass:#1a1407;
+  --in:#7fd9a0; --in-soft:#1c3526; --out:#ff9f92; --out-soft:#43211d; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 48px}
+.app{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:700;font-size:1.35rem;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:.85rem;margin:2px 0 0}
+.total{text-align:right}
+.total b{font-family:var(--display);font-size:1.6rem;display:block;line-height:1;font-variant-numeric:tabular-nums}
+.total span{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.status{font-size:.8rem;color:var(--muted);min-height:1.1em;margin-top:-8px}
+nav{display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+nav button{border:0;background:transparent;color:var(--muted);font:600 .9rem var(--body);padding:10px 2px;border-radius:9px;cursor:pointer}
+nav button[aria-selected="true"]{background:var(--ink);color:var(--surface)}
+section{display:flex;flex-direction:column;gap:10px}
+.lbl{font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.seg button{font:700 1.05rem var(--body);padding:14px 10px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.seg small{font-weight:500;font-size:.78rem;color:var(--muted)}
+.seg .in[aria-pressed="true"]{background:var(--in-soft);border-color:var(--in);color:var(--in)}
+.seg .out[aria-pressed="true"]{background:var(--out-soft);border-color:var(--out);color:var(--out)}
+.seg [aria-pressed="true"] small{color:inherit}
+.models{display:flex;flex-direction:column;gap:6px}
+.models button{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;font:600 .98rem var(--body);padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);cursor:pointer}
+.models button small{font-weight:500;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.models button[aria-pressed="true"]{border-color:var(--brass);background:var(--brass-soft);box-shadow:inset 0 0 0 1px var(--brass)}
+.sizes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.sizes button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 2px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer}
+.sizes button b{font-family:var(--display);font-weight:500;font-size:1.05rem;font-variant-numeric:tabular-nums}
+.sizes button small{font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.sizes button.zero small{color:var(--out);font-weight:700}
+.sizes button[aria-pressed="true"]{background:var(--brass);border-color:var(--brass);color:var(--on-brass)}
+.sizes button[aria-pressed="true"] small{color:var(--on-brass)}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper button{width:52px;height:52px;border-radius:12px;border:1px solid var(--brass);background:transparent;color:var(--brass);font:700 1.5rem var(--body);cursor:pointer}
+.stepper input{width:84px;height:52px;text-align:center;font:700 1.4rem var(--display);border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink)}
+input.obs{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;width:100%}
+.err{color:var(--out);font-size:.9rem;min-height:1.1em;font-weight:600}
+.go{border:0;border-radius:12px;padding:16px;font:700 1.1rem var(--body);cursor:pointer;color:var(--surface);background:var(--out)}
+.go.in{background:var(--in)}
+.done{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-weight:600}
+.done button{border:0;background:transparent;color:var(--brass);font:700 .95rem var(--body);cursor:pointer;padding:4px 0;text-decoration:underline}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.card h2{font-family:var(--body);font-weight:700;font-size:1rem;margin:0;display:flex;justify-content:space-between;gap:10px}
+.card h2 span{font-family:var(--display);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.grid div{display:flex;flex-direction:column;align-items:center;border-radius:8px;padding:5px 0;background:var(--bg);font-variant-numeric:tabular-nums}
+.grid div small{font-size:.68rem;color:var(--muted)}
+.grid div b{font-size:.98rem}
+.grid div.zero{background:var(--out-soft)}
+.grid div.zero b{color:var(--out)}
+.meta{font-size:.85rem;color:var(--muted);margin:0}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.filters select{font:inherit;font-size:.9rem;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);min-width:0;width:100%}
+.sum{display:flex;gap:18px;font-weight:600;font-size:.95rem}
+.sum .i{color:var(--in)} .sum .o{color:var(--out)}
+.list{display:flex;flex-direction:column;gap:6px}
+.row{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;align-items:center}
+.row .q{grid-row:span 2;font-family:var(--display);font-weight:700;font-size:1rem;min-width:48px;text-align:center;border-radius:8px;padding:8px 4px;font-variant-numeric:tabular-nums}
+.row .q.entrada{background:var(--in-soft);color:var(--in)} .row .q.saida{background:var(--out-soft);color:var(--out)}
+.row .t{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.row .d{font-size:.78rem;color:var(--muted);text-align:right;white-space:nowrap}
+.row .o{grid-column:2/4;font-size:.84rem;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.empty{color:var(--muted);font-size:.92rem;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:16px}
+.btn{border:1px solid var(--brass);background:var(--brass);color:var(--on-brass);font:700 1rem var(--body);padding:14px;border-radius:12px;cursor:pointer;width:100%}
+.btn.ghost{background:transparent;color:var(--brass)}
+.btn.danger{border-color:var(--out);background:transparent;color:var(--out)}
+.btn.danger.solid{background:var(--out);color:var(--surface)}
+.ok{color:var(--in);font-weight:600;min-height:1.1em}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+@media (max-width:380px){.grid{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Alianças da Loja</h1>
+      <p class="sub">Biju Mania · alianças de moeda · nº 14 a 29</p>
+    </div>
+    <div class="total"><b id="g-total">0</b><span>peças na loja</span></div>
+  </header>
+  <div class="status" id="status"></div>
+
+  <nav role="tablist">
+    <button id="tab-reg" role="tab" aria-selected="true">Registrar</button>
+    <button id="tab-est" role="tab" aria-selected="false">Estoque</button>
+    <button id="tab-his" role="tab" aria-selected="false">Histórico</button>
+    <button id="tab-bkp" role="tab" aria-selected="false">Backup</button>
+  </nav>
+
+  <!-- REGISTRAR -->
+  <section id="view-reg">
+    <div class="seg">
+      <button class="out" id="t-out" aria-pressed="true">− Saída<small>vendeu ou saiu da loja</small></button>
+      <button class="in" id="t-in" aria-pressed="false">+ Entrada<small>chegou mercadoria</small></button>
+    </div>
+    <div class="lbl">Modelo</div>
+    <div class="models" id="r-models"></div>
+    <div class="lbl">Numeração <span style="text-transform:none;letter-spacing:0;font-weight:500">· embaixo, quantas tem agora</span></div>
+    <div class="sizes" id="r-sizes"></div>
+    <div class="lbl">Quantidade</div>
+    <div class="stepper">
+      <button id="q-minus" aria-label="Diminuir quantidade">−</button>
+      <input id="q-val" type="number" inputmode="numeric" min="1" value="1" aria-label="Quantidade">
+      <button id="q-plus" aria-label="Aumentar quantidade">+</button>
+    </div>
+    <div class="lbl">Observação (opcional)</div>
+    <input class="obs" id="r-obs" type="text" maxlength="120" placeholder="Ex.: venda no balcão, troca, compra do fornecedor" autocomplete="off">
+    <div class="err" id="r-err"></div>
+    <button class="go" id="r-go">Registrar saída</button>
+    <div class="done" id="r-done" hidden><span id="r-done-txt"></span><button id="r-undo">Desfazer</button></div>
+  </section>
+
+  <!-- ESTOQUE -->
+  <section id="view-est" hidden>
+    <p class="meta">Quantas peças tem de cada numeração. Em vermelho, os números zerados. Para mudar alguma quantidade, use Registrar (Entrada ou Saída).</p>
+    <div id="e-list" style="display:flex;flex-direction:column;gap:10px"></div>
+  </section>
+
+  <!-- HISTÓRICO -->
+  <section id="view-his" hidden>
+    <div class="filters">
+      <select id="h-model" aria-label="Filtrar por modelo"></select>
+      <select id="h-type" aria-label="Filtrar por tipo"><option value="">Entradas e saídas</option><option value="entrada">Só entradas</option><option value="saida">Só saídas</option></select>
+    </div>
+    <div class="sum" id="h-sum"></div>
+    <div class="list" id="h-list"></div>
+  </section>
+
+  <!-- BACKUP -->
+  <section id="view-bkp" hidden>
+    <div class="card">
+      <h2>Onde ficam os dados</h2>
+      <p class="meta">O estoque fica guardado neste celular, dentro do navegador. Se limpar os dados do navegador, trocar de aparelho ou abrir em outro navegador, ele não aparece. Por isso, salve um backup de vez em quando (uma vez por semana é um bom hábito).</p>
+      <p class="meta" id="b-last"></p>
+    </div>
+    <button class="btn" id="b-save">Salvar backup</button>
+    <button class="btn ghost" id="b-load">Restaurar backup</button>
+    <input type="file" id="b-file" accept=".json,application/json" hidden>
+    <div class="ok" id="b-ok"></div>
+    <div class="err" id="b-err"></div>
+    <div id="b-confirm" class="card" hidden>
+      <p class="meta" id="b-confirm-txt"></p>
+      <button class="btn danger solid" id="b-yes">Substituir pelo backup</button>
+      <button class="btn ghost" id="b-no">Cancelar</button>
+    </div>
+  </section>
+</div>
+
+<script>
+const SIZES=[];for(let s=14;s<=29;s++)SIZES.push(s);
+const MODELS=[
+  {id:"abaulada-7-anatomica",nome:"Abaulada Lisa 7mm Anatômica Dourada"},
+  {id:"abaulada-4",nome:"Abaulada Lisa 4mm"},
+  {id:"quadrada-2riscos-9",nome:"Quadrada 2 Riscos 9mm"},
+  {id:"quadrada-lisa-5",nome:"Quadrada Lisa 5mm"},
+  {id:"quadrada-1risco-5",nome:"Quadrada 1 Risco 5mm"},
+  {id:"italiana-4",nome:"Italiana 4mm"}
+];
+const KEY="biju-aliancas-v1";
+let data={qtd:{},moves:[],ultimoBackup:null};
+let tab="reg",tipo="saida",selModel=null,selSize=null,lastMove=null,pending=null,storageOk=true;
+const $=id=>document.getElementById(id);
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const q=(m,s)=>Math.max(0,Number(data.qtd[m+"_"+s])||0);
+const totalModel=m=>SIZES.reduce((a,s)=>a+q(m,s),0);
+const nomeDe=id=>(MODELS.find(m=>m.id===id)||{}).nome||id;
+const fmt=iso=>{try{return new Date(iso).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"})}catch(e){return""}};
+
+function clean(d){
+  const out={qtd:{},moves:[],ultimoBackup:null};
+  if(d&&typeof d==="object"){
+    if(d.qtd&&typeof d.qtd==="object")for(const[k,v]of Object.entries(d.qtd)){const n=Number(v);if(isFinite(n)&&n>=0)out.qtd[k]=Math.round(n)}
+    if(Array.isArray(d.moves))out.moves=d.moves.filter(x=>x&&x.quando&&(x.tipo==="entrada"||x.tipo==="saida")).map(x=>({id:String(x.id||""),quando:String(x.quando),tipo:x.tipo,modelo:String(x.modelo),numero:Number(x.numero),qtd:Number(x.qtd)||0,antes:Number(x.antes)||0,depois:Number(x.depois)||0,obs:String(x.obs||"").slice(0,120)}));
+    if(d.ultimoBackup)out.ultimoBackup=String(d.ultimoBackup);
+  }
+  return out;
+}
+function load(){try{const raw=localStorage.getItem(KEY);if(raw)data=clean(JSON.parse(raw))}catch(e){storageOk=false}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(data));storageOk=true;return true}catch(e){storageOk=false;return false}}
+function renderStatus(){
+  if(!storageOk){$("status").textContent="Este navegador não está deixando salvar (talvez esteja em aba anônima). Abra numa aba normal.";$("status").style.color="var(--out)";return}
+  $("status").style.color="";
+  const dias=data.ultimoBackup?Math.floor((Date.now()-new Date(data.ultimoBackup))/864e5):null;
+  if(data.moves.length&&(dias===null||dias>=7))$("status").textContent="Salvo neste celular · faça um backup (aba Backup)";
+  else $("status").textContent="Salvo neste celular";
+}
+function renderTotal(){$("g-total").textContent=MODELS.reduce((a,m)=>a+totalModel(m.id),0)}
+
+/* REGISTRAR */
+function renderReg(){
+  $("t-out").setAttribute("aria-pressed",tipo==="saida");$("t-in").setAttribute("aria-pressed",tipo==="entrada");
+  const go=$("r-go");go.textContent=tipo==="saida"?"Registrar saída":"Registrar entrada";go.className="go"+(tipo==="entrada"?" in":"");
+  const mb=$("r-models");mb.innerHTML="";
+  for(const m of MODELS){const b=el("button");b.setAttribute("aria-pressed",m.id===selModel);
+    b.append(el("span",null,m.nome),el("small",null,totalModel(m.id)+" un."));
+    b.onclick=()=>{selModel=m.id;$("r-err").textContent="";renderReg()};mb.append(b)}
+  const sb=$("r-sizes");sb.innerHTML="";
+  for(const s of SIZES){const b=el("button");const n=selModel?q(selModel,s):null;
+    if(n===0)b.classList.add("zero");
+    b.setAttribute("aria-pressed",s===selSize);b.setAttribute("aria-label","Número "+s+(n===null?"":", "+n+" em estoque"));
+    b.append(el("b",null,String(s)),el("small",null,n===null?"—":n+" un."));
+    b.onclick=()=>{selSize=s;$("r-err").textContent="";renderReg()};sb.append(b)}
+}
+$("t-out").onclick=()=>{tipo="saida";$("r-err").textContent="";renderReg()};
+$("t-in").onclick=()=>{tipo="entrada";$("r-err").textContent="";renderReg()};
+const qv=()=>{const n=parseInt($("q-val").value,10);return isNaN(n)?0:n};
+$("q-minus").onclick=()=>{$("q-val").value=Math.max(1,qv()-1)};
+$("q-plus").onclick=()=>{$("q-val").value=Math.max(1,qv()+1)};
+
+$("r-go").onclick=()=>{
+  const err=$("r-err");err.textContent="";$("r-done").hidden=true;
+  if(!selModel){err.textContent="Escolha o modelo.";return}
+  if(!selSize){err.textContent="Escolha a numeração.";return}
+  const n=qv();if(n<1){err.textContent="A quantidade precisa ser pelo menos 1.";return}
+  const key=selModel+"_"+selSize,antes=q(selModel,selSize);
+  if(tipo==="saida"&&n>antes){err.textContent="Só tem "+antes+" do nº "+selSize+" nesse modelo. Se chegou mercadoria, registre uma Entrada antes.";return}
+  const depois=tipo==="entrada"?antes+n:antes-n;
+  const mv={id:"mv"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),quando:new Date().toISOString(),tipo,modelo:selModel,numero:selSize,qtd:n,antes,depois,obs:$("r-obs").value.trim().slice(0,120)};
+  data.qtd[key]=depois;data.moves.unshift(mv);
+  if(!persist()){data.qtd[key]=antes;data.moves.shift();err.textContent="Não consegui salvar neste navegador. Abra numa aba normal (não anônima).";renderStatus();return}
+  lastMove=mv;
+  $("r-done-txt").textContent=(tipo==="saida"?"Saída":"Entrada")+": "+n+"× "+nomeDe(selModel)+" nº "+selSize+". Agora tem "+depois+".";
+  $("r-done").hidden=false;$("r-undo").hidden=false;
+  $("q-val").value="1";$("r-obs").value="";selSize=null;renderAll();
+};
+$("r-undo").onclick=()=>{
+  if(!lastMove)return;const m=lastMove,key=m.modelo+"_"+m.numero,atual=q(m.modelo,m.numero);
+  const volta=m.tipo==="entrada"?atual-m.qtd:atual+m.qtd;
+  if(volta<0){$("r-err").textContent="Não dá para desfazer: o estoque desse número já mudou.";return}
+  data.qtd[key]=volta;data.moves=data.moves.filter(x=>x.id!==m.id);persist();
+  lastMove=null;$("r-done-txt").textContent="Desfeito. "+nomeDe(m.modelo)+" nº "+m.numero+" voltou para "+volta+".";$("r-undo").hidden=true;renderAll();
+};
+
+/* ESTOQUE */
+function renderEst(){
+  const box=$("e-list");box.innerHTML="";
+  for(const m of MODELS){const c=el("div","card");const h=el("h2");h.append(el("b",null,m.nome),el("span",null,totalModel(m.id)+" un."));c.append(h);
+    const g=el("div","grid");
+    for(const s of SIZES){const n=q(m.id,s);const d=el("div",n===0?"zero":"");d.append(el("small",null,"nº "+s),el("b",null,String(n)));g.append(d)}
+    c.append(g);const z=SIZES.filter(s=>q(m.id,s)===0);
+    c.append(el("p","meta",z.length===16?"Sem nenhuma peça desse modelo ainda.":z.length?"Zerados: "+z.join(", "):"Todas as numerações têm peça."));
+    box.append(c)}
+}
+
+/* HISTÓRICO */
+(function(){const s=$("h-model");s.append(new Option("Todos os modelos",""));for(const m of MODELS)s.append(new Option(m.nome,m.id))})();
+function renderHis(){
+  const fm=$("h-model").value,ft=$("h-type").value;
+  const list=data.moves.filter(x=>(!fm||x.modelo===fm)&&(!ft||x.tipo===ft));
+  let e=0,s=0;for(const x of list){x.tipo==="entrada"?e+=x.qtd:s+=x.qtd}
+  const sum=$("h-sum");sum.innerHTML="";sum.append(el("span","i","Entraram "+e),el("span","o","Saíram "+s));
+  const box=$("h-list");box.innerHTML="";
+  if(!list.length){box.append(el("div","empty",data.moves.length?"Nenhum registro com esse filtro.":"Nenhuma entrada ou saída registrada ainda. Comece pela aba Registrar: lance como Entrada as alianças que já estão na loja."));return}
+  for(const x of list.slice(0,500)){const r=el("div","row");
+    r.append(el("span","q "+x.tipo,(x.tipo==="entrada"?"+":"−")+x.qtd));
+    r.append(el("span","t",nomeDe(x.modelo)+" · nº "+x.numero));
+    r.append(el("span","d",fmt(x.quando)));
+    r.append(el("span","o","Ficou "+x.depois+" (antes "+x.antes+")"+(x.obs?" · "+x.obs:"")));
+    box.append(r)}
+}
+$("h-model").onchange=renderHis;$("h-type").onchange=renderHis;
+
+/* BACKUP */
+function renderBkp(){
+  $("b-last").textContent=data.ultimoBackup?"Último backup: "+fmt(data.ultimoBackup)+".":"Você ainda não salvou nenhum backup.";
+}
+$("b-save").onclick=()=>{
+  $("b-ok").textContent="";$("b-err").textContent="";
+  const agora=new Date();data.ultimoBackup=agora.toISOString();
+  const blob=new Blob([JSON.stringify({app:"aliancas-biju-mania",versao:1,salvoEm:data.ultimoBackup,qtd:data.qtd,moves:data.moves},null,1)],{type:"application/json"});
+  const d=agora.toISOString().slice(0,10);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="backup-aliancas-"+d+".json";document.body.append(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
+  persist();$("b-ok").textContent="Backup salvo na pasta de downloads do celular ("+a.download+").";renderAll();
+};
+$("b-load").onclick=()=>{$("b-ok").textContent="";$("b-err").textContent="";$("b-file").value="";$("b-file").click()};
+$("b-file").onchange=()=>{
+  const f=$("b-file").files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||d.app!=="aliancas-biju-mania")throw 0;
+      pending=clean(d);
+      const tot=Object.values(pending.qtd).reduce((a,b)=>a+b,0);
+      $("b-confirm-txt").textContent="Esse backup é de "+fmt(d.salvoEm)+", com "+tot+" peças e "+pending.moves.length+" registros. Ele vai substituir tudo o que está no app agora.";
+      $("b-confirm").hidden=false;}
+    catch(e){$("b-err").textContent="Esse arquivo não é um backup deste app. Escolha o arquivo que começa com backup-aliancas."}};
+  r.readAsText(f);
+};
+$("b-no").onclick=()=>{pending=null;$("b-confirm").hidden=true};
+$("b-yes").onclick=()=>{if(!pending)return;const old=data;data=pending;data.ultimoBackup=old.ultimoBackup||pending.ultimoBackup;pending=null;
+  if(!persist()){data=old;$("b-err").textContent="Não consegui salvar neste navegador.";return}
+  $("b-confirm").hidden=true;$("b-ok").textContent="Backup restaurado.";lastMove=null;renderAll()};
+
+function renderAll(){renderTotal();renderStatus();({reg:renderReg,est:renderEst,his:renderHis,bkp:renderBkp})[tab]()}
+function setTab(t){tab=t;for(const k of ["reg","est","his","bkp"]){$("tab-"+k).setAttribute("aria-selected",k===t);$("view-"+k).hidden=k!==t}renderAll()}
+for(const k of ["reg","est","his","bkp"])$("tab-"+k).onclick=()=>setTab(k);
+window.addEventListener("storage",e=>{if(e.key===KEY){load();renderAll()}});
+
+load();renderAll();
+</script>
+</body>
+</html>
