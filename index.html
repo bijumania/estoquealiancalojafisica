@@ -161,7 +161,34 @@ nav{grid-template-columns:repeat(3,1fr)}
   <!-- ESTOQUE -->
   <section id="view-est" hidden>
     <p class="meta">Quantas peças tem de cada numeração. Em vermelho, os números zerados. Para mudar alguma quantidade, use Registrar (Entrada ou Saída).</p>
+    <button class="btn ghost" id="m-new-open">+ Novo modelo</button>
+    <div class="card" id="m-new" hidden>
+      <h2>Novo modelo</h2>
+      <input class="obs" id="m-new-nome" type="text" maxlength="60" placeholder="Ex.: Abaulada Lisa 6mm" autocomplete="off" aria-label="Nome do novo modelo">
+      <p class="meta">Ele aparece com a numeração 14 a 29, começando zerado. Depois é só lançar as Entradas.</p>
+      <div class="err" id="m-new-err"></div>
+      <button class="btn" id="m-new-save">Cadastrar modelo</button>
+      <button class="btn ghost" id="m-new-cancel">Cancelar</button>
+    </div>
+    <div class="card" id="m-edit" hidden>
+      <h2>Editar modelo</h2>
+      <input class="obs" id="m-edit-nome" type="text" maxlength="60" autocomplete="off" aria-label="Nome do modelo">
+      <div class="err" id="m-edit-err"></div>
+      <button class="btn" id="m-edit-save">Salvar nome</button>
+      <button class="btn danger" id="m-edit-hide">Ocultar modelo</button>
+      <div id="m-hide-confirm" hidden style="display:flex;flex-direction:column;gap:8px">
+        <p class="meta">O modelo some da tela de Registrar. O estoque e o histórico dele continuam guardados, e você pode mostrar de novo quando quiser.</p>
+        <button class="btn danger solid" id="m-hide-yes">Ocultar</button>
+      </div>
+      <button class="btn danger" id="m-edit-del">Excluir de vez</button>
+      <div id="m-del-confirm" hidden style="display:flex;flex-direction:column;gap:8px">
+        <p class="meta" id="m-del-txt"></p>
+        <button class="btn danger solid" id="m-del-yes">Excluir de vez</button>
+      </div>
+      <button class="btn ghost" id="m-edit-cancel">Fechar</button>
+    </div>
     <div id="e-list" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div id="e-hidden" style="display:flex;flex-direction:column;gap:8px"></div>
   </section>
 
   <!-- HISTÓRICO -->
@@ -183,14 +210,17 @@ const SUPABASE_KEY = "sb_publishable_y8tEYPhzleorUl1kVESvow_9pwVt0QG";
 /* ==================================== */
 
 const SIZES=[];for(let s=14;s<=29;s++)SIZES.push(s);
-const MODELS=[
-  {id:"abaulada-7-anatomica",nome:"Abaulada Lisa 7mm Anatômica Dourada"},
-  {id:"abaulada-4",nome:"Abaulada Lisa 4mm"},
-  {id:"quadrada-2riscos-9",nome:"Quadrada 2 Riscos 9mm"},
-  {id:"quadrada-lisa-5",nome:"Quadrada Lisa 5mm"},
-  {id:"quadrada-1risco-5",nome:"Quadrada 1 Risco 5mm"},
-  {id:"italiana-4",nome:"Italiana 4mm"}
+const DEFAULT_MODELS=[
+  {id:"abaulada-7-anatomica",nome:"Abaulada Lisa 7mm Anatômica Dourada",ativo:true},
+  {id:"abaulada-4",nome:"Abaulada Lisa 4mm",ativo:true},
+  {id:"quadrada-2riscos-9",nome:"Quadrada 2 Riscos 9mm",ativo:true},
+  {id:"quadrada-lisa-5",nome:"Quadrada Lisa 5mm",ativo:true},
+  {id:"quadrada-1risco-5",nome:"Quadrada 1 Risco 5mm",ativo:true},
+  {id:"italiana-4",nome:"Italiana 4mm",ativo:true}
 ];
+let MODELS=DEFAULT_MODELS.slice();
+const ativos=()=>MODELS.filter(m=>m.ativo!==false);
+let editModelId=null,hideConfirm=false;
 const PIN_KEY="biju-aliancas-pin";
 let data={qtd:{},moves:[]},pin="",tab="reg",tipo="saida",selModel=null,selSize=null,lastMove=null,busy=false,loaded=false;
 const $=id=>document.getElementById(id);
@@ -218,6 +248,7 @@ async function rpc(fn,args){
 async function carregar(){
   const d=await rpc("estado",{p_pin:pin});
   data={qtd:(d&&d.qtd)||{},moves:(d&&d.moves)||[]};loaded=true;
+  if(d&&Array.isArray(d.modelos)&&d.modelos.length)MODELS=d.modelos.map(m=>({id:String(m.id),nome:String(m.nome),ativo:m.ativo!==false}));
   setStatus("Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
   renderAll();
 }
@@ -243,8 +274,9 @@ function renderTotal(){$("g-total").textContent=loaded?MODELS.reduce((a,m)=>a+to
 function renderReg(){
   $("t-out").setAttribute("aria-pressed",tipo==="saida");$("t-in").setAttribute("aria-pressed",tipo==="entrada");
   const go=$("r-go");go.textContent=busy?"Salvando…":(tipo==="saida"?"Registrar saída":"Registrar entrada");go.className="go"+(tipo==="entrada"?" in":"");go.disabled=busy;
+  if(selModel&&!ativos().some(m=>m.id===selModel))selModel=null;
   const mb=$("r-models");mb.innerHTML="";
-  for(const m of MODELS){const b=el("button");b.setAttribute("aria-pressed",m.id===selModel);
+  for(const m of ativos()){const b=el("button");b.setAttribute("aria-pressed",m.id===selModel);
     b.append(el("span",null,m.nome),el("small",null,totalModel(m.id)+" un."));
     b.onclick=()=>{selModel=m.id;$("r-err").textContent="";renderReg()};mb.append(b)}
   const sb=$("r-sizes");sb.innerHTML="";
@@ -290,17 +322,73 @@ $("r-undo").onclick=async()=>{
 /* ESTOQUE */
 function renderEst(){
   const box=$("e-list");box.innerHTML="";
-  for(const m of MODELS){const c=el("div","card");const h=el("h2");h.append(el("b",null,m.nome),el("span",null,totalModel(m.id)+" un."));c.append(h);
+  for(const m of ativos()){const c=el("div","card");const h=el("h2");h.append(el("b",null,m.nome),el("span",null,totalModel(m.id)+" un."));c.append(h);
+    const ed=el("button","linkbtn","Editar ou ocultar");ed.style.alignSelf="flex-start";ed.onclick=()=>openEdit(m.id);c.append(ed);
     const g=el("div","grid");
     for(const s of SIZES){const n=q(m.id,s);const d=el("div",n===0?"zero":"");d.append(el("small",null,"nº "+s),el("b",null,String(n)));g.append(d)}
     c.append(g);const z=SIZES.filter(s=>q(m.id,s)===0);
     c.append(el("p","meta",z.length===16?"Sem nenhuma peça desse modelo ainda.":z.length?"Zerados: "+z.join(", "):"Todas as numerações têm peça."));
     box.append(c)}
+  const hb=$("e-hidden");hb.innerHTML="";const ocultos=MODELS.filter(m=>m.ativo===false);
+  if(ocultos.length){hb.append(el("div","lbl","Modelos ocultos"));
+    for(const m of ocultos){const r=el("div","done");r.append(el("span",null,m.nome+" · "+totalModel(m.id)+" un."));
+      const acts=el("span");acts.style.cssText="display:flex;gap:14px";
+      const b=el("button",null,"Mostrar de novo");b.onclick=()=>salvarModelo(m.id,m.nome,true,b);
+      const ed=el("button",null,"Editar");ed.onclick=()=>openEdit(m.id);
+      acts.append(b,ed);r.append(acts);hb.append(r)}}
 }
 
+/* MODELOS: novo, editar, ocultar */
+function erroModelo(e){if(/function|could not find|schema cache/i.test(e.message))return "Falta rodar o código novo (supabase-modelos.sql) no SQL Editor do Supabase.";return e.message}
+$("m-new-open").onclick=()=>{$("m-edit").hidden=true;$("m-new").hidden=false;$("m-new-open").hidden=true;$("m-new-err").textContent="";$("m-new-nome").value="";$("m-new-nome").focus()};
+$("m-new-cancel").onclick=()=>{$("m-new").hidden=true;$("m-new-open").hidden=false};
+$("m-new-nome").onkeydown=e=>{if(e.key==="Enter")$("m-new-save").click()};
+$("m-new-save").onclick=async()=>{
+  const nome=$("m-new-nome").value.trim().replace(/\s+/g," ");
+  if(nome.length<2){$("m-new-err").textContent="Digite o nome do modelo.";return}
+  if(MODELS.some(m=>m.nome.toLowerCase()===nome.toLowerCase())){$("m-new-err").textContent="Já existe um modelo com esse nome.";return}
+  const b=$("m-new-save");b.disabled=true;b.textContent="Salvando…";$("m-new-err").textContent="";
+  try{await rpc("criar_modelo",{p_pin:pin,p_nome:nome});$("m-new").hidden=true;$("m-new-open").hidden=false;await carregar();setStatus("Modelo "+nome+" cadastrado")}
+  catch(e){if(/PIN/.test(e.message))tratarErro(e,()=>{});else $("m-new-err").textContent=erroModelo(e)}
+  b.disabled=false;b.textContent="Cadastrar modelo";
+};
+function openEdit(id){const m=MODELS.find(x=>x.id===id);if(!m)return;editModelId=id;
+  $("m-new").hidden=true;$("m-new-open").hidden=false;$("m-edit").hidden=false;$("m-hide-confirm").hidden=true;$("m-edit-hide").hidden=m.ativo===false;
+  $("m-del-confirm").hidden=true;$("m-edit-del").hidden=false;
+  $("m-edit-err").textContent="";$("m-edit-nome").value=m.nome;$("m-edit").scrollIntoView({behavior:"smooth",block:"center"})}
+$("m-edit-cancel").onclick=()=>{$("m-edit").hidden=true;editModelId=null};
+$("m-edit-hide").onclick=()=>{$("m-hide-confirm").hidden=false;$("m-edit-hide").hidden=true};
+async function salvarModelo(id,nome,ativo,btn){
+  const err=$("m-edit-err");err.textContent="";
+  if(btn){btn.disabled=true}
+  try{await rpc("editar_modelo",{p_pin:pin,p_id:id,p_nome:nome,p_ativo:ativo});$("m-edit").hidden=true;editModelId=null;await carregar();
+    setStatus(ativo===false?"Modelo ocultado":"Modelo salvo")}
+  catch(e){if(/PIN/.test(e.message))tratarErro(e,()=>{});else{const msg=erroModelo(e);if(!$("m-edit").hidden)err.textContent=msg;else setStatus(msg,true)}}
+  if(btn){btn.disabled=false}
+}
+$("m-edit-save").onclick=()=>{const nome=$("m-edit-nome").value.trim().replace(/\s+/g," ");
+  if(nome.length<2){$("m-edit-err").textContent="Digite o nome do modelo.";return}
+  if(MODELS.some(m=>m.id!==editModelId&&m.nome.toLowerCase()===nome.toLowerCase())){$("m-edit-err").textContent="Já existe um modelo com esse nome.";return}
+  salvarModelo(editModelId,nome,null,$("m-edit-save"))};
+$("m-edit-del").onclick=()=>{
+  const m=MODELS.find(x=>x.id===editModelId);if(!m)return;const tot=totalModel(m.id);$("m-edit-err").textContent="";
+  if(tot>0){$("m-edit-err").textContent="Só dá para excluir com o estoque zerado. Esse modelo ainda tem "+tot+" peça"+(tot>1?"s":"")+". Registre a saída delas ou use Ocultar.";return}
+  const n=data.moves.filter(x=>x.modelo===m.id).length;
+  $("m-del-txt").textContent="Excluir "+m.nome+" de vez? "+(n?"Os "+n+" registros do histórico desse modelo também serão apagados. ":"")+"Não dá para desfazer.";
+  $("m-del-confirm").hidden=false;$("m-edit-del").hidden=true;$("m-hide-confirm").hidden=true};
+$("m-del-yes").onclick=async()=>{
+  const id=editModelId,m=MODELS.find(x=>x.id===id);if(!m)return;const b=$("m-del-yes");b.disabled=true;
+  try{await rpc("excluir_modelo",{p_pin:pin,p_id:id});$("m-edit").hidden=true;editModelId=null;
+    if(selModel===id)selModel=null;await carregar();setStatus("Modelo "+m.nome+" excluído")}
+  catch(e){if(/PIN/.test(e.message))tratarErro(e,()=>{});else $("m-edit-err").textContent=erroModelo(e)}
+  b.disabled=false};
+$("m-hide-yes").onclick=()=>{const m=MODELS.find(x=>x.id===editModelId);if(m)salvarModelo(m.id,m.nome,false,$("m-hide-yes"))};
+
 /* HISTÓRICO */
-(function(){const s=$("h-model");s.append(new Option("Todos os modelos",""));for(const m of MODELS)s.append(new Option(m.nome,m.id))})();
+function fillHisModels(){const s=$("h-model"),cur=s.value;s.innerHTML="";s.append(new Option("Todos os modelos",""));
+  for(const m of MODELS)s.append(new Option(m.nome+(m.ativo===false?" (oculto)":""),m.id));s.value=MODELS.some(m=>m.id===cur)?cur:""}
 function renderHis(){
+  fillHisModels();
   const fm=$("h-model").value,ft=$("h-type").value;
   const list=data.moves.filter(x=>(!fm||x.modelo===fm)&&(!ft||x.tipo===ft));
   let e=0,s=0;for(const x of list){x.tipo==="entrada"?e+=x.qtd:s+=x.qtd}
