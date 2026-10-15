@@ -97,6 +97,14 @@ input.obs{font:inherit;color:var(--ink);background:var(--surface);border:1px sol
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 @media (max-width:380px){.grid{grid-template-columns:repeat(4,1fr)}}
 </style>
+<style>
+nav{grid-template-columns:repeat(3,1fr)}
+.pin{font:700 1.6rem var(--display);letter-spacing:.3em;text-align:center;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);width:100%}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:-8px}
+.topline .status{margin-top:0}
+.linkbtn{border:0;background:transparent;color:var(--brass);font:600 .8rem var(--body);cursor:pointer;padding:4px 0;text-decoration:underline;white-space:nowrap}
+.go:disabled{opacity:.6;cursor:default}
+</style>
 </head>
 <body>
 <div class="app">
@@ -105,15 +113,26 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
       <h1>Alianças da Loja</h1>
       <p class="sub">Biju Mania · alianças de moeda · nº 14 a 29</p>
     </div>
-    <div class="total"><b id="g-total">0</b><span>peças na loja</span></div>
+    <div class="total"><b id="g-total">–</b><span>peças na loja</span></div>
   </header>
-  <div class="status" id="status"></div>
+  <div class="topline"><div class="status" id="status">Conectando…</div><button class="linkbtn" id="b-refresh" hidden>Atualizar</button></div>
 
+  <!-- PIN -->
+  <section id="view-pin" hidden>
+    <div class="card">
+      <h2>Digite o PIN da loja</h2>
+      <p class="meta">Só pede uma vez em cada celular ou computador.</p>
+      <input class="pin" id="pin-in" type="password" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="PIN">
+      <div class="err" id="pin-err"></div>
+      <button class="btn" id="pin-go">Entrar</button>
+    </div>
+  </section>
+
+  <div id="main" hidden style="display:flex;flex-direction:column;gap:16px">
   <nav role="tablist">
     <button id="tab-reg" role="tab" aria-selected="true">Registrar</button>
     <button id="tab-est" role="tab" aria-selected="false">Estoque</button>
     <button id="tab-his" role="tab" aria-selected="false">Histórico</button>
-    <button id="tab-bkp" role="tab" aria-selected="false">Backup</button>
   </nav>
 
   <!-- REGISTRAR -->
@@ -154,28 +173,15 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
     <div class="sum" id="h-sum"></div>
     <div class="list" id="h-list"></div>
   </section>
-
-  <!-- BACKUP -->
-  <section id="view-bkp" hidden>
-    <div class="card">
-      <h2>Onde ficam os dados</h2>
-      <p class="meta">O estoque fica guardado neste celular, dentro do navegador. Se limpar os dados do navegador, trocar de aparelho ou abrir em outro navegador, ele não aparece. Por isso, salve um backup de vez em quando (uma vez por semana é um bom hábito).</p>
-      <p class="meta" id="b-last"></p>
-    </div>
-    <button class="btn" id="b-save">Salvar backup</button>
-    <button class="btn ghost" id="b-load">Restaurar backup</button>
-    <input type="file" id="b-file" accept=".json,application/json" hidden>
-    <div class="ok" id="b-ok"></div>
-    <div class="err" id="b-err"></div>
-    <div id="b-confirm" class="card" hidden>
-      <p class="meta" id="b-confirm-txt"></p>
-      <button class="btn danger solid" id="b-yes">Substituir pelo backup</button>
-      <button class="btn ghost" id="b-no">Cancelar</button>
-    </div>
-  </section>
+  </div>
 </div>
 
 <script>
+/* ===== CONFIGURAÇÃO DO SUPABASE ===== */
+const SUPABASE_URL = "https://noeqmzhyzmqhgszbrgmf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_y8tEYPhzleorUl1kVESvow_9pwVt0QG";
+/* ==================================== */
+
 const SIZES=[];for(let s=14;s<=29;s++)SIZES.push(s);
 const MODELS=[
   {id:"abaulada-7-anatomica",nome:"Abaulada Lisa 7mm Anatômica Dourada"},
@@ -185,40 +191,58 @@ const MODELS=[
   {id:"quadrada-1risco-5",nome:"Quadrada 1 Risco 5mm"},
   {id:"italiana-4",nome:"Italiana 4mm"}
 ];
-const KEY="biju-aliancas-v1";
-let data={qtd:{},moves:[],ultimoBackup:null};
-let tab="reg",tipo="saida",selModel=null,selSize=null,lastMove=null,pending=null,storageOk=true;
+const PIN_KEY="biju-aliancas-pin";
+let data={qtd:{},moves:[]},pin="",tab="reg",tipo="saida",selModel=null,selSize=null,lastMove=null,busy=false,loaded=false;
 const $=id=>document.getElementById(id);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const q=(m,s)=>Math.max(0,Number(data.qtd[m+"_"+s])||0);
 const totalModel=m=>SIZES.reduce((a,s)=>a+q(m,s),0);
 const nomeDe=id=>(MODELS.find(m=>m.id===id)||{}).nome||id;
 const fmt=iso=>{try{return new Date(iso).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"})}catch(e){return""}};
+const setStatus=(t,bad)=>{$("status").textContent=t;$("status").style.color=bad?"var(--out)":""};
+function lsGet(k){try{return localStorage.getItem(k)||""}catch(e){return""}}
+function lsSet(k,v){try{v?localStorage.setItem(k,v):localStorage.removeItem(k)}catch(e){}}
 
-function clean(d){
-  const out={qtd:{},moves:[],ultimoBackup:null};
-  if(d&&typeof d==="object"){
-    if(d.qtd&&typeof d.qtd==="object")for(const[k,v]of Object.entries(d.qtd)){const n=Number(v);if(isFinite(n)&&n>=0)out.qtd[k]=Math.round(n)}
-    if(Array.isArray(d.moves))out.moves=d.moves.filter(x=>x&&x.quando&&(x.tipo==="entrada"||x.tipo==="saida")).map(x=>({id:String(x.id||""),quando:String(x.quando),tipo:x.tipo,modelo:String(x.modelo),numero:Number(x.numero),qtd:Number(x.qtd)||0,antes:Number(x.antes)||0,depois:Number(x.depois)||0,obs:String(x.obs||"").slice(0,120)}));
-    if(d.ultimoBackup)out.ultimoBackup=String(d.ultimoBackup);
-  }
-  return out;
+/* chamada ao banco */
+async function rpc(fn,args){
+  const h={"Content-Type":"application/json","apikey":SUPABASE_KEY};
+  if(SUPABASE_KEY.startsWith("eyJ"))h.Authorization="Bearer "+SUPABASE_KEY;
+  let r;
+  try{r=await fetch(SUPABASE_URL.replace(/\/+$/,"")+"/rest/v1/rpc/"+fn,{method:"POST",headers:h,body:JSON.stringify(args)})}
+  catch(e){throw new Error("Sem internet ou o banco não respondeu. Confira a conexão e tente de novo.")}
+  const txt=await r.text();let body=null;try{body=txt?JSON.parse(txt):null}catch(e){}
+  if(!r.ok){const msg=(body&&(body.message||body.error_description||body.hint))||("Erro "+r.status);throw new Error(msg)}
+  return body;
 }
-function load(){try{const raw=localStorage.getItem(KEY);if(raw)data=clean(JSON.parse(raw))}catch(e){storageOk=false}}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(data));storageOk=true;return true}catch(e){storageOk=false;return false}}
-function renderStatus(){
-  if(!storageOk){$("status").textContent="Este navegador não está deixando salvar (talvez esteja em aba anônima). Abra numa aba normal.";$("status").style.color="var(--out)";return}
-  $("status").style.color="";
-  const dias=data.ultimoBackup?Math.floor((Date.now()-new Date(data.ultimoBackup))/864e5):null;
-  if(data.moves.length&&(dias===null||dias>=7))$("status").textContent="Salvo neste celular · faça um backup (aba Backup)";
-  else $("status").textContent="Salvo neste celular";
+
+async function carregar(){
+  const d=await rpc("estado",{p_pin:pin});
+  data={qtd:(d&&d.qtd)||{},moves:(d&&d.moves)||[]};loaded=true;
+  setStatus("Atualizado às "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+  renderAll();
 }
-function renderTotal(){$("g-total").textContent=MODELS.reduce((a,m)=>a+totalModel(m.id),0)}
+
+/* PIN */
+function showPin(msg){$("main").hidden=true;$("view-pin").hidden=false;$("b-refresh").hidden=true;$("pin-err").textContent=msg||"";setStatus("");setTimeout(()=>$("pin-in").focus(),50)}
+function showMain(){$("view-pin").hidden=true;$("main").hidden=false;$("b-refresh").hidden=false}
+$("pin-go").onclick=async()=>{
+  const p=$("pin-in").value.trim();if(!p){$("pin-err").textContent="Digite o PIN.";return}
+  $("pin-go").disabled=true;$("pin-err").textContent="";
+  pin=p;
+  try{await carregar();lsSet(PIN_KEY,p);$("pin-in").value="";showMain()}
+  catch(e){pin="";$("pin-err").textContent=/PIN/.test(e.message)?"PIN incorreto. Confira e tente de novo.":e.message}
+  $("pin-go").disabled=false;
+};
+$("pin-in").onkeydown=e=>{if(e.key==="Enter")$("pin-go").click()};
+$("b-refresh").onclick=async()=>{setStatus("Atualizando…");try{await carregar()}catch(e){tratarErro(e,setStatus)}};
+function tratarErro(e,show){if(/PIN/.test(e.message)){lsSet(PIN_KEY,"");pin="";showPin("O PIN mudou. Digite o PIN novo.")}else show(e.message,true)}
+
+function renderTotal(){$("g-total").textContent=loaded?MODELS.reduce((a,m)=>a+totalModel(m.id),0):"–"}
 
 /* REGISTRAR */
 function renderReg(){
   $("t-out").setAttribute("aria-pressed",tipo==="saida");$("t-in").setAttribute("aria-pressed",tipo==="entrada");
-  const go=$("r-go");go.textContent=tipo==="saida"?"Registrar saída":"Registrar entrada";go.className="go"+(tipo==="entrada"?" in":"");
+  const go=$("r-go");go.textContent=busy?"Salvando…":(tipo==="saida"?"Registrar saída":"Registrar entrada");go.className="go"+(tipo==="entrada"?" in":"");go.disabled=busy;
   const mb=$("r-models");mb.innerHTML="";
   for(const m of MODELS){const b=el("button");b.setAttribute("aria-pressed",m.id===selModel);
     b.append(el("span",null,m.nome),el("small",null,totalModel(m.id)+" un."));
@@ -236,28 +260,31 @@ const qv=()=>{const n=parseInt($("q-val").value,10);return isNaN(n)?0:n};
 $("q-minus").onclick=()=>{$("q-val").value=Math.max(1,qv()-1)};
 $("q-plus").onclick=()=>{$("q-val").value=Math.max(1,qv()+1)};
 
-$("r-go").onclick=()=>{
-  const err=$("r-err");err.textContent="";$("r-done").hidden=true;
+$("r-go").onclick=async()=>{
+  if(busy)return;const err=$("r-err");err.textContent="";$("r-done").hidden=true;
   if(!selModel){err.textContent="Escolha o modelo.";return}
   if(!selSize){err.textContent="Escolha a numeração.";return}
   const n=qv();if(n<1){err.textContent="A quantidade precisa ser pelo menos 1.";return}
-  const key=selModel+"_"+selSize,antes=q(selModel,selSize);
-  if(tipo==="saida"&&n>antes){err.textContent="Só tem "+antes+" do nº "+selSize+" nesse modelo. Se chegou mercadoria, registre uma Entrada antes.";return}
-  const depois=tipo==="entrada"?antes+n:antes-n;
-  const mv={id:"mv"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),quando:new Date().toISOString(),tipo,modelo:selModel,numero:selSize,qtd:n,antes,depois,obs:$("r-obs").value.trim().slice(0,120)};
-  data.qtd[key]=depois;data.moves.unshift(mv);
-  if(!persist()){data.qtd[key]=antes;data.moves.shift();err.textContent="Não consegui salvar neste navegador. Abra numa aba normal (não anônima).";renderStatus();return}
-  lastMove=mv;
-  $("r-done-txt").textContent=(tipo==="saida"?"Saída":"Entrada")+": "+n+"× "+nomeDe(selModel)+" nº "+selSize+". Agora tem "+depois+".";
-  $("r-done").hidden=false;$("r-undo").hidden=false;
-  $("q-val").value="1";$("r-obs").value="";selSize=null;renderAll();
+  const antesLocal=q(selModel,selSize);
+  if(tipo==="saida"&&n>antesLocal){err.textContent="Só tem "+antesLocal+" do nº "+selSize+" nesse modelo. Se chegou mercadoria, registre uma Entrada antes.";return}
+  busy=true;renderReg();
+  const m=selModel,s=selSize,t=tipo;
+  try{
+    const r=await rpc("registrar",{p_pin:pin,p_tipo:t,p_modelo:m,p_numero:s,p_qtd:n,p_obs:$("r-obs").value.trim()});
+    lastMove={id:r.id,modelo:m,numero:s};
+    $("r-done-txt").textContent=(t==="saida"?"Saída":"Entrada")+": "+n+"× "+nomeDe(m)+" nº "+s+". Agora tem "+r.depois+".";
+    $("r-done").hidden=false;$("r-undo").hidden=false;
+    $("q-val").value="1";$("r-obs").value="";selSize=null;
+    busy=false;await carregar().catch(()=>{data.qtd[m+"_"+s]=r.depois;renderAll()});
+  }catch(e){busy=false;renderReg();if(/^Só tem/.test(e.message)){err.textContent=e.message+". Alguém registrou antes de você; a tela foi atualizada.";carregar().catch(()=>{})}else tratarErro(e,(x)=>{err.textContent=x})}
 };
-$("r-undo").onclick=()=>{
-  if(!lastMove)return;const m=lastMove,key=m.modelo+"_"+m.numero,atual=q(m.modelo,m.numero);
-  const volta=m.tipo==="entrada"?atual-m.qtd:atual+m.qtd;
-  if(volta<0){$("r-err").textContent="Não dá para desfazer: o estoque desse número já mudou.";return}
-  data.qtd[key]=volta;data.moves=data.moves.filter(x=>x.id!==m.id);persist();
-  lastMove=null;$("r-done-txt").textContent="Desfeito. "+nomeDe(m.modelo)+" nº "+m.numero+" voltou para "+volta+".";$("r-undo").hidden=true;renderAll();
+$("r-undo").onclick=async()=>{
+  if(!lastMove||busy)return;busy=true;const m=lastMove;
+  try{const r=await rpc("desfazer",{p_pin:pin,p_id:m.id});lastMove=null;
+    $("r-done-txt").textContent="Desfeito. "+nomeDe(m.modelo)+" nº "+m.numero+" voltou para "+r.volta+".";$("r-undo").hidden=true;
+    busy=false;await carregar().catch(()=>{});}
+  catch(e){busy=false;tratarErro(e,(x)=>{$("r-err").textContent=x})}
+  renderReg();
 };
 
 /* ESTOQUE */
@@ -280,7 +307,7 @@ function renderHis(){
   const sum=$("h-sum");sum.innerHTML="";sum.append(el("span","i","Entraram "+e),el("span","o","Saíram "+s));
   const box=$("h-list");box.innerHTML="";
   if(!list.length){box.append(el("div","empty",data.moves.length?"Nenhum registro com esse filtro.":"Nenhuma entrada ou saída registrada ainda. Comece pela aba Registrar: lance como Entrada as alianças que já estão na loja."));return}
-  for(const x of list.slice(0,500)){const r=el("div","row");
+  for(const x of list){const r=el("div","row");
     r.append(el("span","q "+x.tipo,(x.tipo==="entrada"?"+":"−")+x.qtd));
     r.append(el("span","t",nomeDe(x.modelo)+" · nº "+x.numero));
     r.append(el("span","d",fmt(x.quando)));
@@ -289,42 +316,19 @@ function renderHis(){
 }
 $("h-model").onchange=renderHis;$("h-type").onchange=renderHis;
 
-/* BACKUP */
-function renderBkp(){
-  $("b-last").textContent=data.ultimoBackup?"Último backup: "+fmt(data.ultimoBackup)+".":"Você ainda não salvou nenhum backup.";
-}
-$("b-save").onclick=()=>{
-  $("b-ok").textContent="";$("b-err").textContent="";
-  const agora=new Date();data.ultimoBackup=agora.toISOString();
-  const blob=new Blob([JSON.stringify({app:"aliancas-biju-mania",versao:1,salvoEm:data.ultimoBackup,qtd:data.qtd,moves:data.moves},null,1)],{type:"application/json"});
-  const d=agora.toISOString().slice(0,10);
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="backup-aliancas-"+d+".json";document.body.append(a);a.click();
-  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
-  persist();$("b-ok").textContent="Backup salvo na pasta de downloads do celular ("+a.download+").";renderAll();
-};
-$("b-load").onclick=()=>{$("b-ok").textContent="";$("b-err").textContent="";$("b-file").value="";$("b-file").click()};
-$("b-file").onchange=()=>{
-  const f=$("b-file").files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||d.app!=="aliancas-biju-mania")throw 0;
-      pending=clean(d);
-      const tot=Object.values(pending.qtd).reduce((a,b)=>a+b,0);
-      $("b-confirm-txt").textContent="Esse backup é de "+fmt(d.salvoEm)+", com "+tot+" peças e "+pending.moves.length+" registros. Ele vai substituir tudo o que está no app agora.";
-      $("b-confirm").hidden=false;}
-    catch(e){$("b-err").textContent="Esse arquivo não é um backup deste app. Escolha o arquivo que começa com backup-aliancas."}};
-  r.readAsText(f);
-};
-$("b-no").onclick=()=>{pending=null;$("b-confirm").hidden=true};
-$("b-yes").onclick=()=>{if(!pending)return;const old=data;data=pending;data.ultimoBackup=old.ultimoBackup||pending.ultimoBackup;pending=null;
-  if(!persist()){data=old;$("b-err").textContent="Não consegui salvar neste navegador.";return}
-  $("b-confirm").hidden=true;$("b-ok").textContent="Backup restaurado.";lastMove=null;renderAll()};
+function renderAll(){renderTotal();({reg:renderReg,est:renderEst,his:renderHis})[tab]()}
+function setTab(t){tab=t;for(const k of ["reg","est","his"]){$("tab-"+k).setAttribute("aria-selected",k===t);$("view-"+k).hidden=k!==t}renderAll();
+  if(t!=="reg"&&!busy)carregar().catch(()=>{})}
+for(const k of ["reg","est","his"])$("tab-"+k).onclick=()=>setTab(k);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&pin&&!busy)carregar().catch(()=>{})});
 
-function renderAll(){renderTotal();renderStatus();({reg:renderReg,est:renderEst,his:renderHis,bkp:renderBkp})[tab]()}
-function setTab(t){tab=t;for(const k of ["reg","est","his","bkp"]){$("tab-"+k).setAttribute("aria-selected",k===t);$("view-"+k).hidden=k!==t}renderAll()}
-for(const k of ["reg","est","his","bkp"])$("tab-"+k).onclick=()=>setTab(k);
-window.addEventListener("storage",e=>{if(e.key===KEY){load();renderAll()}});
-
-load();renderAll();
+(async()=>{
+  if(SUPABASE_URL.startsWith("COLE")){setStatus("Falta configurar o banco de dados neste arquivo.",true);return}
+  pin=lsGet(PIN_KEY);
+  if(!pin){showPin();return}
+  try{await carregar();showMain()}
+  catch(e){if(/PIN/.test(e.message)){lsSet(PIN_KEY,"");pin="";showPin("Digite o PIN da loja.")}else{showMain();setStatus(e.message,true)}}
+})();
 </script>
 </body>
 </html>
